@@ -1,0 +1,32 @@
+{
+    "name": "apeisia/easy-ebics",
+    "type": "library",
+    "minimum-stability": "dev",
+    "prefer-stable": false,
+    "description": "PHP library for easy ebics communication using the ebics-client-php library from Andrew Svirin.",
+    "authors": [
+        {
+            "name": "Apeisia UG (haftungsbeschränkt)",
+            "email": "mail@apeisia.com",
+            "homepage": "https://apeisia.com/",
+            "role": "Developer"
+        }
+    ],
+    "license": "MIT",
+    "require": {
+        "php": "^7.2",
+        "andrew-svirin/ebics-client-php": "1.0.2",
+        "kingsquare/php-mt940": "^1.5"
+    },
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/UweM/ebics-client-php"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Apeisia\\EasyEbics\\": "src"
+        }
+    }
+}

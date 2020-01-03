@@ -1,0 +1,10 @@
+<?php
+
+define('KEYRING_FILE', 'keyring.json');
+define('KEYRING_PASSWORD', ''); // password for private keys
+define('IS_CERTIFIED', false);
+
+define('HOST_ID', '');
+define('HOST_URL', '');
+define('PARTNER_ID', '');
+define('USER_ID', '');
