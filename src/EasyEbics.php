@@ -5,12 +5,14 @@ namespace Apeisia\EasyEbics;
 use AndrewSvirin\Ebics\Contracts\KeyRingManagerInterface;
 use AndrewSvirin\Ebics\EbicsClient;
 use AndrewSvirin\Ebics\Exceptions\EbicsException;
-use AndrewSvirin\Ebics\Handlers\ResponseHandler;
+use AndrewSvirin\Ebics\Handlers\ResponseHandlerV2;
 use AndrewSvirin\Ebics\Models\Bank;
 use AndrewSvirin\Ebics\Models\KeyRing;
 use AndrewSvirin\Ebics\Models\User;
 use DateTime;
-use Kingsquare\Parser\Banking\Mt940;
+use Genkgo\Camt\Config;
+use Genkgo\Camt\DTO\Entry;
+use Genkgo\Camt\Reader;
 use Symfony\Contracts\HttpClient\Exception\ClientExceptionInterface;
 use Symfony\Contracts\HttpClient\Exception\RedirectionExceptionInterface;
 use Symfony\Contracts\HttpClient\Exception\ServerExceptionInterface;
@@ -25,11 +27,11 @@ class EasyEbics
     /**
      * @var KeyRing
      */
-    private $keyRing;
+    public $keyRing;
     /**
      * @var EbicsClient
      */
-    private $client;
+    public $client;
 
     public function __construct(
         KeyRingManagerInterface $keyRingManager,
@@ -53,6 +55,10 @@ class EasyEbics
         $this->keyRingManager->saveKeyRing($this->keyRing);
     }
 
+    public function getKeyRing() {
+        return $this->keyRing;
+    }
+
     /**
      * generate new keys, send the new keys to the bank, retrieve the public
      * keys of the bank and save everything in the keyring
@@ -67,33 +73,47 @@ class EasyEbics
     public function generateKeysAndPushToBank()
     {
         $status          = [];
-        $responseHandler = new ResponseHandler();
+        $responseHandler = new ResponseHandlerV2();
 
         // Send public certificate of signature A006 to the bank
         $ini           = $this->client->INI(); // INI generates new keys
         $status['INI'] = [
-            'code'       => $responseHandler->retrieveH004ReturnCode($ini),
-            'reportText' => $responseHandler->retrieveH004ReportText($ini),
+            'code'       => $responseHandler->retrieveH00XReturnCode($ini),
+            'reportText' => $responseHandler->retrieveH00XReportText($ini),
         ];
 
         // Send public certificates of authentication (X002) and encryption (E002) to the bank
         $hia           = $this->client->HIA(); // HIA also generates new keys
         $status['HIA'] = [
-            'code'       => $responseHandler->retrieveH004ReturnCode($hia),
-            'reportText' => $responseHandler->retrieveH004ReportText($hia),
+            'code'       => $responseHandler->retrieveH00XReturnCode($hia),
+            'reportText' => $responseHandler->retrieveH00XReportText($hia),
         ];
 
-        // Retrieve the Bank public certificates authentication (X002) and encryption (E002)
-        $hpb = $this->client->HPB();
 
-        $status['HPB'] = [
-            'code'       => $responseHandler->retrieveH004ReturnCode($hpb),
-            'reportText' => $responseHandler->retrieveH004ReportText($hpb),
-        ];
+        $status['HPB'] = $this->retrieveBankPublicKeys();
 
         $this->saveKeyRing();
 
         return $status;
+    }
+
+    /**
+     * @return array
+     * @throws ClientExceptionInterface
+     * @throws EbicsException
+     * @throws RedirectionExceptionInterface
+     * @throws ServerExceptionInterface
+     * @throws TransportExceptionInterface
+     */
+    public function retrieveBankPublicKeys() {
+        $responseHandler = new ResponseHandlerV2();
+        // Retrieve the Bank public certificates authentication (X002) and encryption (E002)
+        $hpb = $this->client->HPB();
+        $this->saveKeyRing();
+        return [
+            'code'       => $responseHandler->retrieveH00XReturnCode($hpb),
+            'reportText' => $responseHandler->retrieveH00XReportText($hpb),
+        ];
     }
 
     /**
@@ -113,37 +133,30 @@ class EasyEbics
      * @param DateTime|null $dateTime
      * @param DateTime|null $startDateTime
      * @param DateTime|null $endDateTime
-     * @return Statement[]|null
+     * @return Entry[]|null
      * @throws ClientExceptionInterface
      * @throws EbicsException
      * @throws RedirectionExceptionInterface
      * @throws ServerExceptionInterface
-     * @throws TransportExceptionInterface
      */
     public function getTransactions(DateTime $dateTime = null, DateTime $startDateTime = null, DateTime $endDateTime = null)
     {
-        $sta = $this->client->STA($dateTime, $startDateTime, $endDateTime);
+        $sta = $this->client->C53($dateTime, $startDateTime, $endDateTime);
         if (!$sta) return null;
 
-        $data = $sta->getDecryptedOrderData()->getOrderData();
+        $allRecords = [];
 
-        $parser     = new Mt940();
-        $statements = $parser->parse($data);
-
-        // change the classes from Kingsquare\Banking\* to Apeisia\EasyEbics\*
-        $ser = serialize($statements);
-        $ser = strtr($ser, [
-            'O:30:"Kingsquare\Banking\Transaction"' => 'O:' . strlen(Transaction::class) . ':"' . Transaction::class . '"',
-            'O:28:"Kingsquare\Banking\Statement"'   => 'O:' . strlen(Statement::class) . ':"' . Statement::class . '"',
-        ]);
-        /** @var Statement[] $statements */
-        $statements = unserialize($ser);
-        foreach ($statements as $statement) {
-            foreach ($statement->getTransactions() as $transaction) {
-                $transaction->setStructuredDescription(DescriptionParser::parseDescription($transaction->getDescription()));
+        $t = $sta->getTransactions();
+        foreach($t as $transaction) {
+            foreach($transaction->getOrderDataItems() as $item) {
+                $reader = new Reader(Config::getDefault());
+                $message = $reader->readString($item->getContent());
+                foreach ($message->getRecords() as $record) {
+                    $allRecords[] = $record;
+                }
             }
         }
 
-        return $statements;
+        return $allRecords;
     }
 }
