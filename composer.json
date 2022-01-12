@@ -18,12 +18,6 @@
         "andrew-svirin/ebics-client-php": "^v1.8.1",
 	"genkgo/camt": "^2.2.0"
     },
-    "repositories": [
-        {
-            "type": "vcs",
-            "url": "https://github.com/UweM/ebics-client-php"
-        }
-    ],
     "autoload": {
         "psr-4": {
             "Apeisia\\EasyEbics\\": "src"
