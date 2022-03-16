@@ -147,9 +147,11 @@ class EasyEbics
         $allRecords = [];
 
         $t = $sta->getTransactions();
+        $config = Config::getDefault();
+        $config->disableXsdValidation();
         foreach($t as $transaction) {
             foreach($transaction->getOrderDataItems() as $item) {
-                $reader = new Reader(Config::getDefault());
+                $reader = new Reader($config);
                 $message = $reader->readString($item->getContent());
                 foreach ($message->getRecords() as $record) {
                     $allRecords[] = $record;
