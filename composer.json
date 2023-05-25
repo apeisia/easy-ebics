@@ -14,7 +14,7 @@
     ],
     "license": "MIT",
     "require": {
-        "php": "^7.2",
+        "php": ">=7.4.0",
         "andrew-svirin/ebics-client-php": "^v1.8.1",
 	"genkgo/camt": "^2.2.0"
     },
